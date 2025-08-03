@@ -4,20 +4,26 @@
     "scale": 100,
     "pos_x": 100,
     "pos_y": 100,
-    "opacity": 1.0
+    "opacity": 1.0,
+    "speed": 100,
+    "ghost": false
   },
   {
     "path": "C:\\Users\\wolfwilson\\Downloads\\Git\\DesktopGIF\\src\\giphy (1).gif",
     "scale": 50,
-    "pos_x": 2073,
-    "pos_y": 1059,
-    "opacity": 1.0
+    "pos_x": 1574,
+    "pos_y": 1019,
+    "opacity": 1.0,
+    "speed": 94,
+    "ghost": false
   },
   {
     "path": "C:\\Users\\wolfwilson\\Downloads\\Git\\DesktopGIF\\src\\giphy.gif",
     "scale": 125,
-    "pos_x": 1781,
-    "pos_y": 715,
-    "opacity": 0.36
+    "pos_x": 1824,
+    "pos_y": 721,
+    "opacity": 1.0,
+    "speed": 135,
+    "ghost": false
   }
 ]
