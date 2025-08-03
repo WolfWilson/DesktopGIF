@@ -7,7 +7,6 @@
 A lightweight Python utility to personalize your screen with floating, animated GIF overlays.
 
 ![DesktopGIF in action](https://i.imgur.com/your-future-screenshot.gif)
-> **Note:** Replace the image link above with a real screenshot or GIF of your application once it's running!
 
 ## About The Project
 
