@@ -1,6 +1,6 @@
 # DesktopGIF 🎞️
 
-![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python) ![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green?style=for-the-badge&logo=qt)  ![Windows](https://img.shields.io/badge/OS-Windows%2010%2B-lightgrey?style=for-the-badge&logo=windows) ![Estado](https://img.shields.io/badge/Estado-En%20Desarrollo-orange?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.13-blue?style=for-the-badge&logo=python) ![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green?style=for-the-badge&logo=qt)  ![Windows](https://img.shields.io/badge/OS-Windows%2010%2B-lightgrey?style=for-the-badge&logo=windows) ![Estado](https://img.shields.io/badge/Estado-En%20Desarrollo-orange?style=for-the-badge)
 
 A lightweight Python utility to personalize your screen with floating, animated GIF overlays.
 
@@ -25,7 +25,7 @@ It's perfect for adding a bit of personality, a funny meme, or a cool animation 
 
 This project is built with these amazing technologies:
 
-* **Python 3.12**
+* **Python 3.13**
 * **PyQt6** (for the Graphical User Interface)
 * **Microsoft SQL Server** (for database management)
 
