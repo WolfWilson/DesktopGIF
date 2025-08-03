@@ -1,191 +1,180 @@
 #!/usr/bin/env python
 # coding: utf-8
 """
-ui/main_window.py – Panel de control con UI mejorada y estilo desacoplado.
+ui/main_window.py – Ventana principal de DesktopGIF.
 """
 
 from __future__ import annotations
 
-import signal
-import sys
-from typing import cast
+from typing import Dict, cast
 
-from PyQt6.QtCore import Qt, QEvent, QTimer         # ← se importa Qt
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, Qt, QTimer, QSize
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
-    QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
-    QSpinBox,
+    QStackedWidget,
     QStyle,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
 
-from modules.overlay import GifOverlay
-from ui.style_gui import APP_STYLE
+from storage.library_store import LibraryStore
+from ui.library_page import LibraryPage
+from ui.edit_page import EditPage
 
 
 class MainWindow(QMainWindow):
+    COLLAPSED = 60
+    EXPANDED = 200
+
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("DesktopGIF Launcher")
-        self.setFixedSize(440, 210)
+        self.setWindowTitle("DesktopGIF – Librería y Edición")
+        self.resize(960, 640)
 
-        # Estado interno
-        self.gif_path: str | None = None
-        self.scale_percent: int = 100
-        self.overlay_window: GifOverlay | None = None
-        self._force_quit: bool = False
+        self._store = LibraryStore()
+        self._menu_anim: QPropertyAnimation | None = None
+        self._menu_expanded = False
 
-        # --------------- UI -----------------
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(12)
+        # ---------- menú lateral ----------
+        self.menu_frame = QFrame()
+        self.menu_frame.setObjectName("menuFrame")       #  ← setObjectName en vez de parámetro
+        self.menu_frame.setStyleSheet("#menuFrame { background-color: #333; }")
+        self.menu_frame.setFixedWidth(self.COLLAPSED)
 
-        # Título
-        title = QLabel("DesktopGIF Launcher")
-        title.setObjectName("titleLabel")                   # ← se asigna después
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.btn_toggle = QPushButton("Menú")
+        self.btn_library = QPushButton("Librería")
+        self.btn_edit = QPushButton("Panel de Edición")
 
-        # Info
-        self.info_label = QLabel("Ningún archivo GIF seleccionado.")
-        self.info_label.setObjectName("infoLabel")
-        self.info_label.setWordWrap(True)
+        self.menu_buttons: Dict[QPushButton, str] = {
+            self.btn_toggle: "Menú",
+            self.btn_library: "Librería",
+            self.btn_edit: "Panel de Edición",
+        }
 
-        # Botón seleccionar
-        self.btn_select = QPushButton("Seleccionar GIF")
+        menu_layout = QVBoxLayout(self.menu_frame)
+        menu_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        menu_layout.setContentsMargins(4, 4, 4, 4)
+        menu_layout.setSpacing(8)
 
-        # Escala
-        scale_box = QHBoxLayout()
-        scale_label = QLabel("Escala:")
-        self.spin_scale = QSpinBox()
-        self.spin_scale.setRange(10, 400)
-        self.spin_scale.setValue(100)
-        self.spin_scale.setSuffix("%")
-        scale_box.addWidget(scale_label)
-        scale_box.addWidget(self.spin_scale)
-        scale_box.addStretch()
+        for btn, text in self.menu_buttons.items():
+            btn.setIcon(self._icon_for(text))
+            btn.setIconSize(QSize(32, 32))
+            btn.setText("")
+            btn.setStyleSheet(
+                """
+                QPushButton {
+                    color: white; background: transparent; border: none;
+                    padding: 8px; text-align: left;
+                }
+                QPushButton:hover { background-color: #444; }
+                """
+            )
+            menu_layout.addWidget(btn)
 
-        # Botón lanzar
-        self.btn_launch = QPushButton("Lanzar GIF")
-        self.btn_launch.setEnabled(False)
+        # ---------- páginas ----------
+        self.pages = QStackedWidget()
+        self.page_library = LibraryPage(self._store)
+        self.page_edit = EditPage()
 
-        # Añadir al layout principal
-        main_layout.addWidget(title)
-        main_layout.addSpacing(4)
-        main_layout.addWidget(self.info_label)
-        main_layout.addWidget(self.btn_select)
-        main_layout.addLayout(scale_box)
-        main_layout.addWidget(self.btn_launch)
+        self.pages.addWidget(self.page_library)
+        self.pages.addWidget(self.page_edit)
 
-        central = QWidget()
-        central.setLayout(main_layout)
-        self.setCentralWidget(central)
+        # ---------- layout raíz ----------
+        root_layout = QHBoxLayout()
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+        root_layout.addWidget(self.menu_frame)
+        root_layout.addWidget(self.pages)
 
-        # Estilo global
-        self.setStyleSheet(APP_STYLE)
+        container = QWidget()
+        container.setLayout(root_layout)
+        self.setCentralWidget(container)
 
-        # --------------- Conexiones ----------
-        self.btn_select.clicked.connect(self.select_file)
-        self.btn_launch.clicked.connect(self.launch_overlay)
-        self.spin_scale.valueChanged.connect(lambda v: setattr(self, "scale_percent", v))
+        # ---------- conexiones ----------
+        self.btn_toggle.clicked.connect(self._toggle_menu)
+        self.btn_library.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.page_library)
+        )
+        self.btn_edit.clicked.connect(
+            lambda: self.pages.setCurrentWidget(self.page_edit)
+        )
 
-        self.setup_tray_icon()
-        signal.signal(signal.SIGINT, lambda *_: self.close_app())
-
-    # ------------------------------------------------------------------
-    # Lógica principal
-    # ------------------------------------------------------------------
-    def select_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar GIF", "", "GIF Files (*.gif)")
-        if path:
-            self.gif_path = path
-            self.info_label.setText(f"Archivo: …{path[-40:]}")
-            self.btn_launch.setEnabled(True)
-
-    def launch_overlay(self) -> None:
-        if self.gif_path:
-            if self.overlay_window and self.overlay_window.isVisible():
-                self.overlay_window.close()
-            self.overlay_window = GifOverlay(self.gif_path, self.scale_percent)
-            self.overlay_window.show()
+        # ---------- bandeja ----------
+        self._init_tray()
 
     # ------------------------------------------------------------------
-    # Bandeja de sistema
+    # Icono helper
     # ------------------------------------------------------------------
-    def setup_tray_icon(self) -> None:
-        try:
-            icon = QIcon("icon.png")
-            if icon.isNull():
-                raise FileNotFoundError
-            self.setWindowIcon(icon)
-        except FileNotFoundError:
-            style = cast(QStyle, self.style())
-            icon = style.standardIcon(style.StandardPixmap.SP_TitleBarMenuButton)
-
-        self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(icon)
-        self.tray_icon.setToolTip("DesktopGIF Launcher")
-
-        tray_menu = QMenu()
-        show_action = QAction("Mostrar Panel", self)
-        quit_action = QAction("Salir", self)
-        show_action.triggered.connect(self.show_from_tray)
-        quit_action.triggered.connect(self.close_app)
-
-        tray_menu.addAction(show_action)
-        tray_menu.addSeparator()
-        tray_menu.addAction(quit_action)
-
-        self.tray_icon.setContextMenu(tray_menu)
-        self.tray_icon.show()
+    def _icon_for(self, text: str) -> QIcon:
+        style = cast(QStyle, self.style())
+        return {
+            "Menú": style.standardIcon(style.StandardPixmap.SP_FileDialogListView),
+            "Librería": style.standardIcon(style.StandardPixmap.SP_DirIcon),
+            "Panel de Edición": style.standardIcon(style.StandardPixmap.SP_DesktopIcon),
+        }.get(text, QIcon())
 
     # ------------------------------------------------------------------
-    # Eventos ventana / bandeja
+    # Animar menú
+    # ------------------------------------------------------------------
+    def _toggle_menu(self) -> None:
+        anim = QPropertyAnimation(self.menu_frame, b"minimumWidth", self)
+        anim.setDuration(300)
+        anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        if self._menu_expanded:
+            anim.setStartValue(self.EXPANDED)
+            anim.setEndValue(self.COLLAPSED)
+            for btn in self.menu_buttons:
+                btn.setText("")
+        else:
+            anim.setStartValue(self.COLLAPSED)
+            anim.setEndValue(self.EXPANDED)
+            for btn, text in self.menu_buttons.items():
+                btn.setText(text)
+
+        anim.start()
+        self._menu_anim = anim
+        self._menu_expanded = not self._menu_expanded
+
+    # ------------------------------------------------------------------
+    # Bandeja
+    # ------------------------------------------------------------------
+    def _init_tray(self) -> None:
+        style = cast(QStyle, self.style())
+        icon = style.standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+
+        self.tray = QSystemTrayIcon(icon, self)
+        self.tray.setToolTip("DesktopGIF")
+
+        menu = QMenu()
+        menu.addAction("Mostrar", self._restore_from_tray)
+        menu.addAction("Salir", self.close)
+
+        self.tray.setContextMenu(menu)
+        self.tray.show()
+
+    def _restore_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    # ------------------------------------------------------------------
+    # Minimizar a bandeja
     # ------------------------------------------------------------------
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
             QTimer.singleShot(0, self.hide)
-            self.tray_icon.showMessage(
+            self.tray.showMessage(
                 "Minimizado",
                 "DesktopGIF sigue ejecutándose.",
                 QSystemTrayIcon.MessageIcon.Information,
                 2000,
             )
         super().changeEvent(event)
-
-    def closeEvent(self, event):  # noqa: ANN001
-        if self._force_quit:
-            if self.overlay_window:
-                self.overlay_window.close()
-            self.tray_icon.hide()
-            event.accept()
-        else:
-            event.ignore()
-            self.hide()
-
-    def show_from_tray(self) -> None:
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
-
-    def close_app(self) -> None:
-        self._force_quit = True
-        self.close()
-
-
-# --------- Ejecutar directamente ----------
-if __name__ == "__main__":
-    from PyQt6.QtWidgets import QApplication
-
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-
-    win = MainWindow()
-    win.show()
-
-    sys.exit(app.exec())
