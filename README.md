@@ -1,12 +1,11 @@
 # DesktopGIF 🎞️
 
-[![MIT License][license-shield]][license-url]
-[![Python Version][python-shield]][python-url]
-[![PyQt6][pyqt-shield]][pyqt-url]
+![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python) ![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green?style=for-the-badge&logo=qt) ![SQL Server](https://img.shields.io/badge/Base%20de%20Datos-SQL%20Server-red?style=for-the-badge&logo=microsoftsqlserver) ![Windows](https://img.shields.io/badge/OS-Windows%2010%2B-lightgrey?style=for-the-badge&logo=windows) ![Estado](https://img.shields.io/badge/Estado-En%20Desarrollo-orange?style=for-the-badge)
 
 A lightweight Python utility to personalize your screen with floating, animated GIF overlays.
 
 ![DesktopGIF in action](https://i.imgur.com/your-future-screenshot.gif)
+> **Note:** Replace the image link above with a real screenshot or GIF of your application once it's running!
 
 ## About The Project
 
@@ -26,8 +25,9 @@ It's perfect for adding a bit of personality, a funny meme, or a cool animation 
 
 This project is built with these amazing technologies:
 
-* [![Python][python-shield]][python-url]
-* [![PyQt6][pyqt-shield]][pyqt-url]
+* **Python 3.12**
+* **PyQt6** (for the Graphical User Interface)
+* **Microsoft SQL Server** (for database management)
 
 ## 🚀 Getting Started
 
@@ -51,9 +51,9 @@ Make sure you have Python 3 installed on your system.
     ```sh
     cd DesktopGIF
     ```
-3.  **Install PyQt6**
+3.  **Install project dependencies**
     ```sh
-    pip install PyQt6
+    pip install PyQt6 pyodbc
     ```
 
 ## ▶️ Usage
