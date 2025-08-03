@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 """
-ui/main_window.py – Panel de control de DesktopGIF
-· Permite elegir un GIF, lanzarlo como ventana flotante y
-  minimizarse a la bandeja del sistema.
+ui/main_window.py – Panel de control con UI mejorada y estilo desacoplado.
 """
 
 from __future__ import annotations
@@ -12,84 +10,112 @@ import signal
 import sys
 from typing import cast
 
-from PyQt6.QtCore import QEvent, QTimer
+from PyQt6.QtCore import Qt, QEvent, QTimer         # ← se importa Qt
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
-    QStyle,          # ← ¡QStyle vive en QtWidgets!
+    QSpinBox,
+    QStyle,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
+
 from modules.overlay import GifOverlay
+from ui.style_gui import APP_STYLE
+
 
 class MainWindow(QMainWindow):
-    """
-    Ventana principal que funciona como panel de control.
-    Permite seleccionar un GIF, lanzarlo y se minimiza a la bandeja de sistema.
-    """
-
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("DesktopGIF Launcher")
-        self.setFixedSize(400, 150)
+        self.setFixedSize(440, 210)
 
         # Estado interno
         self.gif_path: str | None = None
+        self.scale_percent: int = 100
         self.overlay_window: GifOverlay | None = None
-        self._force_quit: bool = False  # Controla el cierre definitivo
+        self._force_quit: bool = False
 
-        # ---------------------- UI ----------------------
-        layout = QVBoxLayout()
-        self.label = QLabel("Ningún archivo GIF seleccionado.")
+        # --------------- UI -----------------
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(12)
+
+        # Título
+        title = QLabel("DesktopGIF Launcher")
+        title.setObjectName("titleLabel")                   # ← se asigna después
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Info
+        self.info_label = QLabel("Ningún archivo GIF seleccionado.")
+        self.info_label.setObjectName("infoLabel")
+        self.info_label.setWordWrap(True)
+
+        # Botón seleccionar
         self.btn_select = QPushButton("Seleccionar GIF")
+
+        # Escala
+        scale_box = QHBoxLayout()
+        scale_label = QLabel("Escala:")
+        self.spin_scale = QSpinBox()
+        self.spin_scale.setRange(10, 400)
+        self.spin_scale.setValue(100)
+        self.spin_scale.setSuffix("%")
+        scale_box.addWidget(scale_label)
+        scale_box.addWidget(self.spin_scale)
+        scale_box.addStretch()
+
+        # Botón lanzar
         self.btn_launch = QPushButton("Lanzar GIF")
         self.btn_launch.setEnabled(False)
 
-        layout.addWidget(self.label)
-        layout.addWidget(self.btn_select)
-        layout.addWidget(self.btn_launch)
+        # Añadir al layout principal
+        main_layout.addWidget(title)
+        main_layout.addSpacing(4)
+        main_layout.addWidget(self.info_label)
+        main_layout.addWidget(self.btn_select)
+        main_layout.addLayout(scale_box)
+        main_layout.addWidget(self.btn_launch)
 
-        central_widget = QWidget()
-        central_widget.setLayout(layout)
-        self.setCentralWidget(central_widget)
+        central = QWidget()
+        central.setLayout(main_layout)
+        self.setCentralWidget(central)
 
-        # ------------------ Conexiones ------------------
+        # Estilo global
+        self.setStyleSheet(APP_STYLE)
+
+        # --------------- Conexiones ----------
         self.btn_select.clicked.connect(self.select_file)
         self.btn_launch.clicked.connect(self.launch_overlay)
+        self.spin_scale.valueChanged.connect(lambda v: setattr(self, "scale_percent", v))
 
-        # -------------- Ícono de bandeja ---------------
         self.setup_tray_icon()
-
-        # -------------- Ctrl+C en consola --------------
         signal.signal(signal.SIGINT, lambda *_: self.close_app())
 
     # ------------------------------------------------------------------
-    # Selección y lanzamiento del GIF
+    # Lógica principal
     # ------------------------------------------------------------------
     def select_file(self) -> None:
-        filepath, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar GIF", "", "GIF Files (*.gif)"
-        )
-        if filepath:
-            self.gif_path = filepath
-            self.label.setText(f"Archivo: …{self.gif_path[-35:]}")
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar GIF", "", "GIF Files (*.gif)")
+        if path:
+            self.gif_path = path
+            self.info_label.setText(f"Archivo: …{path[-40:]}")
             self.btn_launch.setEnabled(True)
 
     def launch_overlay(self) -> None:
         if self.gif_path:
             if self.overlay_window and self.overlay_window.isVisible():
                 self.overlay_window.close()
-
-            self.overlay_window = GifOverlay(self.gif_path)
+            self.overlay_window = GifOverlay(self.gif_path, self.scale_percent)
             self.overlay_window.show()
 
     # ------------------------------------------------------------------
-    # Configuración bandeja de sistema
+    # Bandeja de sistema
     # ------------------------------------------------------------------
     def setup_tray_icon(self) -> None:
         try:
@@ -98,7 +124,6 @@ class MainWindow(QMainWindow):
                 raise FileNotFoundError
             self.setWindowIcon(icon)
         except FileNotFoundError:
-            # Pylance feliz: aseguramos que style no sea None
             style = cast(QStyle, self.style())
             icon = style.standardIcon(style.StandardPixmap.SP_TitleBarMenuButton)
 
@@ -109,7 +134,6 @@ class MainWindow(QMainWindow):
         tray_menu = QMenu()
         show_action = QAction("Mostrar Panel", self)
         quit_action = QAction("Salir", self)
-
         show_action.triggered.connect(self.show_from_tray)
         quit_action.triggered.connect(self.close_app)
 
@@ -121,22 +145,20 @@ class MainWindow(QMainWindow):
         self.tray_icon.show()
 
     # ------------------------------------------------------------------
-    # Eventos de ventana
+    # Eventos ventana / bandeja
     # ------------------------------------------------------------------
     def changeEvent(self, event: QEvent) -> None:
-        """Detecta el minimizado y esconde la ventana."""
         if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
             QTimer.singleShot(0, self.hide)
             self.tray_icon.showMessage(
-                "Minimizado a la bandeja",
+                "Minimizado",
                 "DesktopGIF sigue ejecutándose.",
                 QSystemTrayIcon.MessageIcon.Information,
                 2000,
             )
         super().changeEvent(event)
 
-    def closeEvent(self, event) -> None:  # noqa: D401
-        """Intercepta el cierre de ventana."""
+    def closeEvent(self, event):  # noqa: ANN001
         if self._force_quit:
             if self.overlay_window:
                 self.overlay_window.close()
@@ -145,41 +167,25 @@ class MainWindow(QMainWindow):
         else:
             event.ignore()
             self.hide()
-            self.tray_icon.showMessage(
-                "En segundo plano",
-                "DesktopGIF sigue ejecutándose. Hacé clic derecho en el ícono para salir.",
-                QSystemTrayIcon.MessageIcon.Information,
-                2000,
-            )
 
-    # ------------------------------------------------------------------
-    # Acciones de bandeja
-    # ------------------------------------------------------------------
     def show_from_tray(self) -> None:
         self.showNormal()
         self.raise_()
         self.activateWindow()
 
     def close_app(self) -> None:
-        """Cierra por completo la aplicación."""
         self._force_quit = True
         self.close()
 
 
-# ----------------------------------------------------------------------
-# Lanzador principal (para ejecutar directamente este módulo)
-# ----------------------------------------------------------------------
-def main() -> None:
+# --------- Ejecutar directamente ----------
+if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
-    window = MainWindow()
-    window.show()
+    win = MainWindow()
+    win.show()
 
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
