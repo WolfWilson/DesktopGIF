@@ -3,18 +3,21 @@
     "path": "C:/Users/wolfwilson/Downloads/Git/DesktopGIF/src/giphy (1).gif",
     "scale": 100,
     "pos_x": 100,
-    "pos_y": 100
+    "pos_y": 100,
+    "opacity": 1.0
   },
   {
     "path": "C:\\Users\\wolfwilson\\Downloads\\Git\\DesktopGIF\\src\\giphy (1).gif",
     "scale": 50,
-    "pos_x": 2129,
-    "pos_y": 1063
+    "pos_x": 2073,
+    "pos_y": 1059,
+    "opacity": 1.0
   },
   {
     "path": "C:\\Users\\wolfwilson\\Downloads\\Git\\DesktopGIF\\src\\giphy.gif",
-    "scale": 50,
-    "pos_x": 1927,
-    "pos_y": 1043
+    "scale": 125,
+    "pos_x": 1781,
+    "pos_y": 715,
+    "opacity": 0.36
   }
 ]

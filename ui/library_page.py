@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-#ui/library_page.py
 """
 ui/library_page.py – Librería persistente con miniaturas de GIF.
 """
@@ -17,7 +16,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
-    QStyle,            # ← QStyle está en QtWidgets
+    QStyle,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -104,14 +103,15 @@ class LibraryPage(QWidget):
         self._overlay = GifOverlay(
             gif_path=entry.path,
             scale_percent=entry.scale,
-            on_close=lambda x, y, s: self._save_state(entry.path, x, y, s),
+            opacity=entry.opacity,
+            on_close=lambda x, y, s, o: self._save_state(entry.path, x, y, s, o),
         )
         self._overlay.move(entry.pos_x, entry.pos_y)
         self._overlay.show()
 
-    def _save_state(self, path: str, x: int, y: int, scale: int) -> None:
+    def _save_state(self, path: str, x: int, y: int, scale: int, opacity: float) -> None:
         entry = self._store.get(path) or GifEntry(path)
-        entry.pos_x, entry.pos_y, entry.scale = x, y, scale
+        entry.pos_x, entry.pos_y, entry.scale, entry.opacity = x, y, scale, opacity
         self._store.update(entry)
 
     # ---------- CRUD ----------
