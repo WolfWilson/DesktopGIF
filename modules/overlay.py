@@ -5,8 +5,9 @@ modules/overlay.py – Ventana flotante para mostrar un GIF reescalable.
 
 • Sin bordes, transparente y siempre encima.
 • Arrastrable con clic izquierdo.
-• Menú contextual con escalas rápidas, opacidad y cerrar.
-• Callback opcional `on_close(x, y, scale, opacity)` para persistir estado.
+• Menú contextual con escalas rápidas, opacidad y velocidad.
+• Modo fantasma solo se activa/desactiva desde la biblioteca.
+• Callback opcional `on_close(x, y, scale, opacity, speed, ghost)` para persistir estado.
 """
 
 from __future__ import annotations
@@ -15,7 +16,14 @@ from typing import Callable, Optional, cast
 
 from PyQt6.QtCore import QPoint, QSize, Qt
 from PyQt6.QtGui import QAction, QContextMenuEvent, QMouseEvent, QMovie
-from PyQt6.QtWidgets import QLabel, QMainWindow, QMenu, QSlider, QWidgetAction, QGraphicsOpacityEffect
+from PyQt6.QtWidgets import (
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QSlider,
+    QWidgetAction,
+    QGraphicsOpacityEffect
+)
 
 
 class GifOverlay(QMainWindow):
@@ -24,12 +32,16 @@ class GifOverlay(QMainWindow):
         gif_path: str,
         scale_percent: int = 100,
         opacity: float = 1.0,
-        on_close: Optional[Callable[[int, int, int, float], None]] = None,
+        speed: int = 100,
+        ghost: bool = False,
+        on_close: Optional[Callable[[int, int, int, float, int, bool], None]] = None,
     ) -> None:
         super().__init__()
         self.gif_path = gif_path
         self.scale_percent = max(scale_percent, 1)
         self.opacity_value = max(0.1, min(opacity, 1.0))
+        self.speed_value = max(10, min(speed, 400))
+        self.ghost_enabled = ghost
         self._on_close = on_close
 
         # Para arrastre
@@ -57,21 +69,23 @@ class GifOverlay(QMainWindow):
         self._movie.frameChanged.connect(self._on_first_frame)
         self._movie.start()
 
-        # ---------- Opacidad inicial ----------
+        # ---------- Opacidad ----------
         self._opacity_effect = QGraphicsOpacityEffect(self)
         self._label.setGraphicsEffect(self._opacity_effect)
         self.set_opacity(self.opacity_value)
 
-    # ------------------------------------------------------------------
-    # Primer frame → tamaño real
+        # ---------- Velocidad ----------
+        self.set_speed(self.speed_value)
+
+        # ---------- Modo fantasma ----------
+        self.set_ghost_mode(self.ghost_enabled)
+
     # ------------------------------------------------------------------
     def _on_first_frame(self) -> None:
         self._original_size = self._movie.currentPixmap().size()
         self.apply_scale(self.scale_percent)
         self._movie.frameChanged.disconnect(self._on_first_frame)
 
-    # ------------------------------------------------------------------
-    # Escalado
     # ------------------------------------------------------------------
     def apply_scale(self, percent: int) -> None:
         if self._original_size is None:
@@ -84,16 +98,25 @@ class GifOverlay(QMainWindow):
         self.setFixedSize(new_size)
 
     # ------------------------------------------------------------------
-    # Opacidad
-    # ------------------------------------------------------------------
     def set_opacity(self, value: float) -> None:
-        """Ajusta la opacidad visual del GIF."""
         self.opacity_value = max(0.1, min(value, 1.0))
         if hasattr(self, "_opacity_effect"):
             self._opacity_effect.setOpacity(self.opacity_value)
 
-    # ------------------------------------------------------------------
-    # Arrastre
+    def set_speed(self, speed: int) -> None:
+        self.speed_value = max(10, min(speed, 400))
+        self._movie.setSpeed(self.speed_value)
+
+    def set_ghost_mode(self, enabled: bool) -> None:
+        """Modo fantasma (solo activado desde la biblioteca)."""
+        self.ghost_enabled = enabled
+        flags = self.windowFlags()
+        if enabled:
+            self.setWindowFlags(flags | Qt.WindowType.WindowTransparentForInput)
+        else:
+            self.setWindowFlags(flags & ~Qt.WindowType.WindowTransparentForInput)
+        self.show()  # Reaplicar flags
+
     # ------------------------------------------------------------------
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -110,9 +133,11 @@ class GifOverlay(QMainWindow):
             self._drag_origin = None
 
     # ------------------------------------------------------------------
-    # Menú contextual
-    # ------------------------------------------------------------------
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        if self.ghost_enabled:
+            # En modo fantasma no mostrar menú
+            return
+
         menu = QMenu(self)
 
         # Escala
@@ -130,12 +155,21 @@ class GifOverlay(QMainWindow):
         opacity_slider.setOrientation(Qt.Orientation.Horizontal)
         opacity_slider.setRange(10, 100)
         opacity_slider.setValue(int(self.opacity_value * 100))
-        opacity_slider.valueChanged.connect(
-            lambda val: self.set_opacity(val / 100)
-        )
+        opacity_slider.valueChanged.connect(lambda val: self.set_opacity(val / 100))
         opacity_action = QWidgetAction(menu)
         opacity_action.setDefaultWidget(opacity_slider)
         menu.addAction(opacity_action)
+
+        # Velocidad
+        speed_slider = QSlider()
+        speed_slider.setOrientation(Qt.Orientation.Horizontal)
+        speed_slider.setRange(10, 400)
+        speed_slider.setValue(self.speed_value)
+        speed_slider.setToolTip("Velocidad (%)")
+        speed_slider.valueChanged.connect(lambda val: self.set_speed(val))
+        speed_action = QWidgetAction(menu)
+        speed_action.setDefaultWidget(speed_slider)
+        menu.addAction(speed_action)
 
         # Cerrar
         menu.addSeparator()
@@ -144,9 +178,14 @@ class GifOverlay(QMainWindow):
         menu.exec(event.globalPos())
 
     # ------------------------------------------------------------------
-    # Persistencia al cerrar
-    # ------------------------------------------------------------------
-    def closeEvent(self, event):  # noqa: ANN001
+    def closeEvent(self, event) -> None:  # noqa: ANN001
         if self._on_close:
-            self._on_close(self.x(), self.y(), self.scale_percent, self.opacity_value)
+            self._on_close(
+                self.x(),
+                self.y(),
+                self.scale_percent,
+                self.opacity_value,
+                self.speed_value,
+                self.ghost_enabled
+            )
         super().closeEvent(event)

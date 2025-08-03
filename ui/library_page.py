@@ -67,8 +67,6 @@ class LibraryPage(QWidget):
             self._add_item(Path(entry.path))
 
     # ===================================================
-    # Slots
-    # ===================================================
     def _add_gifs(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Agregar GIF(s)", "", "GIF Files (*.gif)"
@@ -85,42 +83,60 @@ class LibraryPage(QWidget):
         menu = QMenu(self)
         act_run = menu.addAction("Ejecutar")
         act_del = menu.addAction("Eliminar")
+        menu.addSeparator()
+        act_toggle_ghost = menu.addAction("Alternar modo fantasma")
+
         chosen = menu.exec(self.list_widget.mapToGlobal(pos))
 
         if chosen is act_run:
             self._execute(item)
         elif chosen is act_del:
             self._remove_item(item)
+        elif chosen is act_toggle_ghost:
+            path = item.data(Qt.ItemDataRole.UserRole)
+            current = self._store.get_ghost(path)
+            new_state = not current
+            self._store.set_ghost(path, new_state)
 
-    # ---------- ejecutar ----------
+            # 🔹 Si el GIF está abierto, aplicar el cambio en vivo
+            if self._overlay and self._overlay.isVisible():
+                # Verifica que el overlay actual sea este GIF
+                if str(Path(self._overlay.gif_path).resolve()) == str(Path(path).resolve()):
+                    self._overlay.set_ghost_mode(new_state)
+
+    # ===================================================
     def _execute(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)
         entry = self._store.get(path) or GifEntry(path)
-
         if self._overlay and self._overlay.isVisible():
             self._overlay.close()
-
         self._overlay = GifOverlay(
             gif_path=entry.path,
             scale_percent=entry.scale,
             opacity=entry.opacity,
-            on_close=lambda x, y, s, o: self._save_state(entry.path, x, y, s, o),
+            speed=entry.speed,
+            ghost=entry.ghost,
+            on_close=lambda x, y, s, o, sp, g: self._save_state(
+                entry.path, x, y, s, o, sp, g
+            ),
         )
         self._overlay.move(entry.pos_x, entry.pos_y)
         self._overlay.show()
 
-    def _save_state(self, path: str, x: int, y: int, scale: int, opacity: float) -> None:
+    def _save_state(
+        self, path: str, x: int, y: int, scale: int,
+        opacity: float, speed: int, ghost: bool
+    ) -> None:
         entry = self._store.get(path) or GifEntry(path)
-        entry.pos_x, entry.pos_y, entry.scale, entry.opacity = x, y, scale, opacity
+        entry.pos_x, entry.pos_y, entry.scale = x, y, scale
+        entry.opacity, entry.speed, entry.ghost = opacity, speed, ghost
         self._store.update(entry)
 
-    # ---------- CRUD ----------
+    # ===================================================
     def _add_item(self, path: Path) -> None:
-        # Evita duplicados visuales
         if any(Path(i.data(Qt.ItemDataRole.UserRole)).resolve() == path.resolve()
                for i in self._iter_items()):
             return
-
         pix: QPixmap = first_frame_as_pixmap(path, self.THUMB_SIZE)
         icon = QIcon(pix)
         item = QListWidgetItem(icon, "")
@@ -133,14 +149,12 @@ class LibraryPage(QWidget):
         self._store.remove(path)
         self.list_widget.takeItem(self.list_widget.row(item))
 
-    # ---------- util ----------
     def _iter_items(self) -> Iterator[QListWidgetItem]:
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item is not None:
                 yield item
 
-    # ---------- tecla Supr ----------
     def eventFilter(self, src, evt):  # noqa: ANN001
         if src is self.list_widget and isinstance(evt, QKeyEvent):
             if evt.key() == Qt.Key.Key_Delete and (item := self.list_widget.currentItem()):
