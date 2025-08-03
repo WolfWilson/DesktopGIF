@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+#storage/library_store.py
 """
 storage/library_store.py – Persiste la librería de GIFs en JSON.
 """

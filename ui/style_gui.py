@@ -1,3 +1,4 @@
+#ui/style_gui.py
 """
 Hoja de estilos (QSS) para DesktopGIF.
 

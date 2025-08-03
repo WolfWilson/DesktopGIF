@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+#modules/overlay.py
 """
 modules/overlay.py – Ventana flotante para mostrar un GIF reescalable.
 

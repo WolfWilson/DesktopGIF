@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+#ui/library_page.py
 """
 ui/library_page.py – Librería persistente con miniaturas de GIF.
 """

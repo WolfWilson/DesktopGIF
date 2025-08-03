@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+#ui/main_window.py
 """
 ui/main_window.py – Ventana principal de DesktopGIF.
 """
@@ -11,9 +12,9 @@ from typing import Dict, cast
 from PyQt6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, Qt, QTimer, QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
@@ -30,9 +31,14 @@ from ui.edit_page import EditPage
 
 
 class MainWindow(QMainWindow):
+    """Ventana principal con menú lateral y bandeja del sistema."""
+
     COLLAPSED = 60
     EXPANDED = 200
 
+    # ------------------------------------------------------------------
+    # Constructor
+    # ------------------------------------------------------------------
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("DesktopGIF – Librería y Edición")
@@ -44,7 +50,7 @@ class MainWindow(QMainWindow):
 
         # ---------- menú lateral ----------
         self.menu_frame = QFrame()
-        self.menu_frame.setObjectName("menuFrame")       #  ← setObjectName en vez de parámetro
+        self.menu_frame.setObjectName("menuFrame")               # ← ahora con setter
         self.menu_frame.setStyleSheet("#menuFrame { background-color: #333; }")
         self.menu_frame.setFixedWidth(self.COLLAPSED)
 
@@ -155,7 +161,10 @@ class MainWindow(QMainWindow):
 
         menu = QMenu()
         menu.addAction("Mostrar", self._restore_from_tray)
-        menu.addAction("Salir", self.close)
+
+        quit_act = menu.addAction("Salir")
+        assert quit_act is not None        # ← Pylance feliz
+        quit_act.triggered.connect(self._quit_from_tray)
 
         self.tray.setContextMenu(menu)
         self.tray.show()
@@ -164,6 +173,14 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    def _quit_from_tray(self) -> None:
+        """Cierra overlay, oculta icono y finaliza la aplicación."""
+        if self.page_library._overlay and self.page_library._overlay.isVisible():
+            self.page_library._overlay.close()
+
+        self.tray.hide()
+        QApplication.quit()
 
     # ------------------------------------------------------------------
     # Minimizar a bandeja
